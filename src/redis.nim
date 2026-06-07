@@ -100,6 +100,15 @@ proc open*(host = "localhost", port = 6379.Port): Redis =
 
   result.socket.connect(host, port)
 
+proc openUnix*(path = "/var/run/redis/redis.sock"): Redis =
+  ## Open a synchronous unix connection to a redis server.
+  result = Redis(
+    socket: newSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP, buffered = false),
+    pipeline: newPipeline()
+  )
+
+  result.socket.connectUnix(path)
+
 proc openAsync*(host = "localhost", port = 6379.Port): Future[AsyncRedis] {.async.} =
   ## Open an asynchronous connection to a redis server.
   result = AsyncRedis(
@@ -109,6 +118,16 @@ proc openAsync*(host = "localhost", port = 6379.Port): Future[AsyncRedis] {.asyn
   )
 
   await result.socket.connect(host, port)
+
+proc openUnixAsync*(path = "/var/run/redis/redis.sock"): Future[AsyncRedis] {.async.} =
+  ## Open an asynchronous unix connection to a redis server.
+  result = AsyncRedis(
+    socket: newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP, buffered = false),
+    pipeline: newPipeline(),
+    sendQueue: initDeque[Future[void]]()
+  )
+
+  await result.socket.connectUnix(path)
 
 proc finaliseCommand(r: Redis | AsyncRedis) =
   when r is AsyncRedis:
@@ -1237,9 +1256,15 @@ proc publish*(r: Redis | AsyncRedis, channel: string, message: string): Future[R
 #   return ???
 
 proc subscribe*(r: AsyncRedis, channel: string) {.async.} =
-  ## Listen for messages published to the given channels
+  ## Listen for messages published to the given channel
   await r.sendCommand("SUBSCRIBE", @[channel])
   let commandback = await r.readNext()
+
+proc subscribe*(r: AsyncRedis, channels: seq[string]) {.async.} =
+  ## Listen for messages published to the given channels
+  await r.sendCommand("SUBSCRIBE", channels)
+  for c in channels:
+    let commandback = await r.readNext()
 
 # proc unsubscribe*(r: Redis, [channel: openarray[string], : string): ???? =
 #   ## Stop listening for messages posted to the given channels
@@ -1315,6 +1340,11 @@ proc auth*(r: Redis | AsyncRedis, password: string): Future[void] {.multisync.} 
   await r.sendCommand("AUTH", password)
   raiseNoOK(r, await r.readStatus())
 
+proc auth*(r: Redis | AsyncRedis, username: string, password: string): Future[void] {.multisync.} =
+  ## Authenticate to a server that uses Redis ACLs
+  await r.sendCommand("AUTH", @[username, password])
+  raiseNoOK(r, await r.readStatus())
+
 proc echoServ*(r: Redis | AsyncRedis, message: string): Future[RedisString] {.multisync.} =
   ## Echo the given string
   await r.sendCommand("ECHO", message)
@@ -1325,8 +1355,13 @@ proc ping*(r: Redis | AsyncRedis): Future[RedisStatus] {.multisync.} =
   await r.sendCommand("PING")
   result = await r.readStatus()
 
-proc quit*(r: Redis | AsyncRedis): Future[void] {.multisync.} =
+proc close*(r: Redis | AsyncRedis): Future[void] {.multisync.} =
   ## Close the connection
+  r.socket.close()
+
+proc quit*(r: Redis | AsyncRedis): Future[void] {.multisync.} =
+  ## Close the connection with using QUIT command
+  ## Note: This command is regarded as deprecated since Redis version 7.2.0.
   await r.sendCommand("QUIT")
   raiseNoOK(r, await r.readStatus())
   r.socket.close()
