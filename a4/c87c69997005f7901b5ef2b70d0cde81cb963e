@@ -1,0 +1,19 @@
+redis.nimble
+  s_d09ebb1aa289e0::t_01bb5861abc811 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "a4c87c69997005f7901b5ef2b70d0cde81cb963e",
+  "prompts": {},
+  "sessions": {
+    "s_d09ebb1aa289e0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a9064d9-0ccc-46d8-b850-b31cb27e9606",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Zed <zedeus@pm.me>"
+    }
+  }
+}
